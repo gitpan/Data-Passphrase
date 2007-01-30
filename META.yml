@@ -1,0 +1,17 @@
+--- #YAML:1.0
+name:                Data-Passphrase
+version:             v0.0.5
+abstract:            passphrase strength checker
+license:             ~
+generated_by:        ExtUtils::MakeMaker version 6.31
+distribution_type:   module
+requires:     
+    Object::InsideOut:             1.33
+    Readonly:                      1.03
+    Test::More:                    0.54
+    version:                       0.53
+meta-spec:
+    url:     http://module-build.sourceforge.net/META-spec-v1.2.html
+    version: 1.2
+author:
+    - Andrew J. Korty <ajk@iu.edu>

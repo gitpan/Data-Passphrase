@@ -1,0 +1,43 @@
+This file contains message digests of all files listed in MANIFEST,
+signed via the Module::Signature module, version 0.50.
+
+To verify the content in this distribution, first make sure you have
+Module::Signature installed, then type:
+
+    % cpansign -v
+
+It will check each file's integrity, as well as the signature's
+validity.  If "==> Signature verified OK! <==" is not displayed,
+the distribution may already have been compromised, and you should
+not run its Makefile.PL or Build.PL.
+
+-----BEGIN PGP SIGNED MESSAGE-----
+Hash: SHA1
+
+SHA1 6b34625bb32b9596fd3c6879bb7b71dd42c88cfa MANIFEST
+SHA1 756e82cfa653872f521ee195332b4c3e33d9e5b0 META.yml
+SHA1 5962d1664f0f8b47d67367e11c7c9c9a5df831d8 Makefile.PL
+SHA1 c918b64323e74b59949504fc9623b563bc789628 README
+SHA1 d2bd86cb56392cc870b06049e800df454fcc15e4 examples/passphrase_deny
+SHA1 d9226bd9f328d8b0fb3b7852658d7867ae3d1693 examples/passphrase_rules
+SHA1 c0f0cf3d262fa358ce5cd7f52e4adc659eeed4fa lib/Data/Passphrase.pm
+SHA1 765d747ef3fe2362b6de4ead94d5c8ec66530c3d lib/Data/Passphrase/Apache.pm
+SHA1 307ecffb2543b46d1405c45bb3510f02a0aef7b6 lib/Data/Passphrase/Graph.pm
+SHA1 1b9564d1beadfdd99c7c8e3be78928463bd59c49 lib/Data/Passphrase/Graph/Qwerty.pm
+SHA1 3bd02ea884a43fd8ff8b9e8952302027cc155516 lib/Data/Passphrase/Graph/Roman.pm
+SHA1 1b02d26e551caba9c2a4ccf5b0744962dffb25f5 lib/Data/Passphrase/Phrasebook.pm
+SHA1 a4f35516da469fe0411b149bd83cfcf06548d788 lib/Data/Passphrase/Phrasebook/Bloom.pm
+SHA1 54cc985e1f0359104a049d1bf9e4b918b791ed2e lib/Data/Passphrase/Request.pm
+SHA1 58b58f88eb4eb187c64de7478a114a90d6771067 lib/Data/Passphrase/Response.pm
+SHA1 ec8a5d94177aacdc592aeeaeacfb1d4d90bb94b0 lib/Data/Passphrase/Rule.pm
+SHA1 dd04e8b8822c9fb2260c78ceb751b7a392b47e81 lib/Data/Passphrase/Ruleset.pm
+SHA1 6116a79a37bc9feba75fee9c1cf5b117d292e247 scripts/passphrase-test
+SHA1 10e309bf592dde9742b7387d5e2a05b6faeabdf4 t/00-load.t
+SHA1 7d851e2ff78c35f4cfa9ee3a1812460881d23529 t/01-local.t
+-----BEGIN PGP SIGNATURE-----
+Version: GnuPG v1.4.2.2 (GNU/Linux)
+
+iD8DBQFFv6w08gM8+Mr5peERAvwMAJ9xrbvYxsFu8zuwy/SOOPHtOympzgCdHOlf
+7+lsYd8eCyVdpmNZpnHz9dg=
+=LHOP
+-----END PGP SIGNATURE-----
