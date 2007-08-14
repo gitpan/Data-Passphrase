@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 
-# $Id: passphrase-test,v 1.9 2007/01/30 20:09:03 ajk Exp $
+# $Id: passphrase-test,v 1.10 2007/08/14 15:45:51 ajk Exp $
 
 use strict;
 use warnings;
@@ -57,117 +57,147 @@ my $passphrase_object = Data::Passphrase->new({
     username => $Username,
 });
 
-# build test plan
-my @test_plan = ();
-my $number_of_tests = 0;
-foreach my $rule (@{$ruleset->get_rules()}) {
+sub build_test_plan {
+    my @test_plan = ();
+    foreach my $rule ( @{ $ruleset->get_rules() } ) {
 
-    # unpack rule attributes
-    my $rule_code    = $rule->get_code   ();
-    my $rule_message = $rule->get_message();
+        # unpack rule attributes
+        my $rule_code    = $rule->get_code   ();
+        my $rule_message = $rule->get_message();
 
-    # skip disabled tests
-    next if $rule->get_disabled();
+        # skip disabled tests
+        next if $rule->get_disabled();
 
-    # get list of passphrases from test specification if any
-    my $battery  = $rule->get_test() or next;
+        # get list of passphrases from test specification if any
+        my $battery  = $rule->get_test() or next;
 
-    # if the battery is specified as code, run it
-    if (ref $battery eq 'CODE') {
-        $battery = $battery->($passphrase_object);
-    }
-
-    # if a hash, each test phrase may contain distinct code/message data
-    my @tests;
-    if (ref $battery eq 'HASH') {
-        @tests = map {
-            my $phrase_data = $battery->{$_};
-
-            # if the hash value is a hash ref, get the code/message from there
-            my ($code, $message);
-            if (ref $phrase_data) {
-                $code    = exists $phrase_data->{code   }
-                         ?        $phrase_data->{code   } : $rule_code   ;
-                $message = exists $phrase_data->{message}
-                         ?        $phrase_data->{message} : $rule_message;
-            }
-
-            # otherwise, assume it's the scalar message and inherit the code
-            else {
-                $code    = $rule_code;
-                $message = defined $phrase_data ? $phrase_data : $rule_message;
-            }
-
-            {
-                code    => $code,
-                message => $message,
-                phrase  => $_,
-            };
-        } keys %$battery;
-    }
-
-    # if a scalar or array, it's just the test phrases
-    else {
-        @tests = map {
-            {
-                code    => $rule->get_code   (),
-                message => $rule->get_message(),
-                phrase  => $_,
-            };
-        } ref $battery eq 'ARRAY' ? @$battery : $battery;
-    }
-
-    # queue up these tests and move on to the next rule
-    push @test_plan, @tests;
-    $number_of_tests += scalar @tests;
-}
-
-plan tests => $number_of_tests;
-
-# evaluate each rule in turn
-foreach my $test (@test_plan) {
-
-    my $test_phrase = $test->{phrase};
-
-    # special case for localhost: call subroutine directly
-    my ($code, $message);
-    if (!defined $location || $location eq 'localhost') {
-        $passphrase_object->set_passphrase($test_phrase);
-        $passphrase_object->validate();
-        $code    = $passphrase_object->get_code   ();
-        $message = $passphrase_object->get_message();
-    }
-
-    # if location is remote, do an HTTP request
-    else {
-
-        # grab password if we haven't already
-        if (!defined $Password) {
-            require Term::ReadKey;
-            Term::ReadKey->import();
-
-            # get the password with no echo
-            print 'password: ';
-            ReadMode('noecho');
-            chomp($Password = <STDIN>);
-            ReadMode('restore');
-            print "\n";
+        # if the battery is specified as code, run it
+        if (ref $battery eq 'CODE') {
+            $battery = $battery->($passphrase_object);
         }
 
-        my $user_agent = MyAgent->new();
-        my $response   = $user_agent->post($location, {
-            passphrase => $test_phrase,
-            username   => $Username,
-        });
-        $code    = $response->code   ();
-        $message = $response->message();
+        # if a hash, each test phrase may contain distinct code/message data
+        my @tests;
+        if (ref $battery eq 'HASH') {
+            @tests = map {
+                my $phrase_data = $battery->{$_};
+
+                # if the hash value is a hash ref, extract values
+                my ($code, $message, $score);
+                if (ref $phrase_data) {
+                    $code    = exists $phrase_data->{code   }
+                             ?        $phrase_data->{code   } : $rule_code   ;
+                    $message = exists $phrase_data->{message}
+                             ?        $phrase_data->{message} : $rule_message;
+
+                    if (exists $phrase_data->{score}) {
+                        $score = $phrase_data->{score};
+                    }
+                }
+
+                # otherwise, assume it's the scalar message and inherit $code
+                else {
+                    $code    = $rule_code;
+                    $message = defined $phrase_data ? $phrase_data
+                                                    : $rule_message;
+                }
+
+                {
+                    code    => $code,
+                    message => $message,
+                    phrase  => $_,
+                    score   => $score,
+                };
+            } keys %$battery;
+        }
+
+        # if a scalar or array, it's just the test phrases
+        else {
+            @tests = map {
+                {
+                    code    => $rule->get_code   (),
+                    message => $rule->get_message(),
+                    phrase  => $_,
+                };
+            } ref $battery eq 'ARRAY' ? @$battery : $battery;
+        }
+
+        # queue up these tests and move on to the next rule
+        push @test_plan, @tests;
     }
 
-    # compare codes
-    is $code, $test->{code},
-        join '', $test_phrase, ' (', $test->{message}, ')'
-        or diag "     message: $message";
+    return \@test_plan;
 }
+
+sub run_tests {
+    my ($test_plan) = @_;
+    foreach my $test (@$test_plan) {
+
+        my $test_phrase = $test->{phrase};
+
+        # special case for localhost: call subroutine directly
+        my ($code, $message, $score);
+        if (!defined $location || $location eq 'localhost') {
+            $passphrase_object->set_passphrase($test_phrase);
+            $passphrase_object->validate();
+            $code    = $passphrase_object->get_code   ();
+            $message = $passphrase_object->get_message();
+            $score   = $passphrase_object->get_score  ();
+        }
+
+        # if location is remote, do an HTTP request
+        else {
+            require JSON::DWIW;
+
+            # grab password if we haven't already
+            if (!defined $Password) {
+                require Term::ReadKey;
+                Term::ReadKey->import();
+
+                # get the password with no echo
+                print 'password: ';
+                ReadMode('noecho');
+                chomp($Password = <STDIN>);
+                ReadMode('restore');
+                print "\n";
+            }
+
+            my $user_agent = MyAgent->new();
+            my $response   = $user_agent->post($location, {
+                passphrase => $test_phrase,
+                username   => $Username,
+            });
+            $code    = $response->code   ();
+            $message = $response->message();
+
+            # get score from JSON-formatted response
+            $score = JSON::DWIW->new()->from_json( $response->content() )->{score};
+        }
+
+        # check the score if one was returned
+        if (exists $test->{score}) {
+            is $score, $test->{score},
+               "$test_phrase (message: $test->{message}, score: $test->{score})"
+               or diag "     score: $score";
+        }
+
+        # else just compare codes
+        else {
+            is $code, $test->{code},
+               join '', $test_phrase, ' (', $test->{message}, ')'
+               or diag "     message: $message";
+        }
+    }
+}
+
+# build two test plans: one for codes/messages and one for scores
+my $plan  = build_test_plan;
+
+# submit overall test plan
+plan tests => scalar @$plan;
+
+# run the tests
+run_tests $plan;
 
 __END__
 

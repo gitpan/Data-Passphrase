@@ -1,6 +1,7 @@
-# $Id: Request.pm,v 1.2 2006/08/03 19:09:11 ajk Exp $
+# $Id: Request.pm,v 1.3 2007/08/14 15:45:51 ajk Exp $
 
-package Data::Passphrase::Request;
+package # hide from PAUSE
+    Data::Passphrase::Request;
 
 1;
 __END__

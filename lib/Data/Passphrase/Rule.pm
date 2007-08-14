@@ -1,4 +1,4 @@
-# $Id: Rule.pm,v 1.5 2006/08/28 15:54:02 ajk Exp $
+# $Id: Rule.pm,v 1.6 2007/08/14 15:45:51 ajk Exp $
 
 use strict;
 use warnings;
@@ -7,20 +7,22 @@ package Data::Passphrase::Rule; {
     use Object::InsideOut;
 
     # object attributes
-    my @code     :Field(Std => 'code',     Type => 'numeric');
-    my @debug    :Field(Std => 'debug',    Type => 'numeric');
-    my @disabled :Field(Std => 'disabled', Type => 'numeric');
-    my @message  :Field(Std => 'message',                   );
-    my @test     :Field(Std => 'test',     Type => 'CODE'   );
-    my @validate :Field(Std => 'validate', Type => 'CODE'   );
+    my @code     :Field( Std => 'code',     Type => 'numeric' );
+    my @debug    :Field( Std => 'debug',    Type => 'numeric' );
+    my @disabled :Field( Std => 'disabled', Type => 'numeric' );
+    my @message  :Field( Std => 'message',                    );
+    my @score    :Field( Std => 'score',                      );
+    my @test     :Field( Std => 'test',     Type => 'CODE'    );
+    my @validate :Field( Std => 'validate', Type => 'CODE'    );
 
     my %init_args :InitArgs = (
-        code     => {          Field => \@code,     Type => 'numeric'},
-        debug    => {Def => 0, Field => \@debug,    Type => 'numeric'},
-        disabled => {Def => 0, Field => \@disabled, Type => 'numeric'},
-        message  => {          Field => \@message,                   },
-        test     => {          Field => \@test,                      },
-        validate => {          Field => \@validate, Type => 'CODE'   },
+        code     => {           Field => \@code,     Type => 'numeric' },
+        debug    => { Def => 0, Field => \@debug,    Type => 'numeric' },
+        disabled => { Def => 0, Field => \@disabled, Type => 'numeric' },
+        message  => {           Field => \@message,                    },
+        score    => {           Field => \@score,                      },
+        test     => {           Field => \@test,                       },
+        validate => {           Field => \@validate, Type => 'CODE'    },
     );
 }
 
@@ -37,7 +39,7 @@ Data::Passphrase::Rule - rule for validating passphrases
        code     => 450,
        message  => 'is too short',
        test     => 'X' x 15,
-       validate => sub { $_[0] >= 15 },
+       validate => sub { $_[0] / 25 },
     });
 
 =head1 DESCRIPTION
@@ -81,9 +83,9 @@ specified.
 
 =item validate
 
-Reference to a subroutine that does the validation.  This subroutine
-may override the I<code> and/or I<message> attributes by setting them
-excplitly.  See L</EXAMPLES>.
+Reference to a subroutine that does the validation and returns a
+score.  This subroutine may override the I<code> and/or I<message>
+attributes by setting them excplitly.  See L</EXAMPLES>.
 
 =back
 
@@ -96,7 +98,8 @@ Here's a more convoluted example.  The validation subroutine in this
 rule sets the I<code> and I<message> attributes explicitly, which is
 useful to conditionally apply of certain checks or when an external
 application provides the code and/or message.  This example makes use
-of Cracklib to test non-passphrases.
+of Cracklib to test non-passphrases and does no complicated scoring --
+passwords receive a score of 0 for failing or 1 for passing.
 
  # invoke Cracklib
  {

@@ -1,4 +1,4 @@
-# $Id: Apache.pm,v 1.4 2007/01/30 20:09:03 ajk Exp $
+# $Id: Apache.pm,v 1.5 2007/08/14 15:45:51 ajk Exp $
 
 use strict;
 use warnings;
@@ -132,19 +132,25 @@ package Data::Passphrase::Apache; {
             debug => $arg_ref->{debug},
         };
 
-        # set the response code, message, and a custom document (for web
-        # browsers)
+        # set the response code, message, and a custom document with the score
         my $code    = $response->{code   };
         my $message = $response->{message};
+        my $score   = $response->{score  };
         my $r = $arg_ref->{r};
         $r->status_line("$code $message");
-        $r->custom_response($code, "passphrase $message");
 
         # send header
         $r->content_type("text/plain");
-        if (!$IS_MOD_PERL_2) {
-            $r->send_http_header();
-        }
+
+        # send JSON document with score and other results
+        $r->send_http_header();
+        $r->print(<<"END");
+{
+    "code":    $code,
+    "message": "$message",
+    "score":   $score
+}
+END
 
         return 0;
     }
@@ -159,7 +165,7 @@ package Data::Passphrase::Apache; {
         my $username   = $arg_ref->{apv_ref}{username  };
 
         # if a passphrase is supplied, validate it
-        my ($code, $message); 
+        my ($code, $message, $score);
         if (defined $passphrase) {
             $debug and warn 'validating supplied passphrase';
 
@@ -173,6 +179,7 @@ package Data::Passphrase::Apache; {
 
                 $code    = $response->{code   };
                 $message = $response->{message};
+                $score   = $response->{score  };
             }
 
             # if location is remote, do an HTTP request
@@ -186,9 +193,10 @@ package Data::Passphrase::Apache; {
                 );
                 $code    = $response->code   ();
                 $message = $response->message();
+                $score   = $response->score  ();
             }
 
-            $debug and warn "response: $code $message";
+            $debug and warn "response: $code $message, score: $score\%";
         }
 
         $debug and warn 'printing form';
@@ -211,7 +219,7 @@ END
         # print validation message if validation occurred
         if (defined $message) {
             print '<p><strong>Passphrase ', encode_entities($message),
-                '</strong></p>';
+                "score: $score\%</strong></p>";
         }
 
         # print footer
@@ -290,6 +298,7 @@ In F<httpd.conf>:
         SSLRequireSSL
         
         PerlHandler +Data::Passphrase::Apache
+        SetHandler  perl-script
         
         # turn on debugging (default: 0)
         PerlSetVar PassphraseDebug 1
@@ -319,10 +328,11 @@ HTTP client:
             passphrase => $passphrase,
             username   => $username,
         });
-        $code          = $response->code();
+        $code          = $response->code   ();
         $message       = $response->message();
+        $score         = $response->score  ();
     
-        print "$code $message\n";
+        print "$code $message, score: $score\%\n";
     }
 
 SOAP client:
@@ -344,7 +354,7 @@ SOAP client:
                 passphrase => $passphrase,
             })->result()
             or die $!;
-        print $response->{code}, ' ', $response->{message}, "\n";
+        print "$result->{code} $result->{message}, score: $result->{score}\%\n";
     }
 
 
@@ -370,9 +380,10 @@ parameter, which defaults to $r->user().  Sites may wish to configure
 rules to check passphrases based on user-related data, so the
 C<username> parameter may be useful for testing.
 
-The response consists only of an HTTP response code and status
-message.  If a passphrase is deemed to weak via a certain rule, the
-error code associated with that rule is returned.  Usually, these
+The response consists of an HTTP response code and status message in
+the header, and a JSON representation of the code, message, and score
+in the body.  If a passphrase is deemed to weak via a certain rule,
+the error code associated with that rule is returned.  Usually, these
 error codes are in the 4xx range.  If a passphrase passes all rules,
 200 is returned.
 

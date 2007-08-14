@@ -1,4 +1,4 @@
-# $Id: Makefile.PL,v 1.6 2006/08/04 20:09:23 ajk Exp $
+# $Id: Makefile.PL,v 1.7 2007/08/14 15:45:51 ajk Exp $
 
 use ExtUtils::MakeMaker;
 
@@ -8,6 +8,10 @@ WriteMakefile(
     EXE_FILES      => [qw(scripts/passphrase-test)],
     NAME           => 'Data::Passphrase',
     PREREQ_PM      => {
+        Apache::Request   => 1.2,
+        Bloom::Filter     => 0.03,
+        HTTP::Status      => 1.26,
+        List::MoreUtils   => 0.19,
         Object::InsideOut => 1.33,
         Readonly          => 1.03,
         Test::More        => 0.54,

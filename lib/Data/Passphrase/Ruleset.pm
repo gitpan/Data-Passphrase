@@ -1,4 +1,4 @@
-# $Id: Ruleset.pm,v 1.5 2007/01/30 20:09:03 ajk Exp $
+# $Id: Ruleset.pm,v 1.6 2007/08/14 15:45:51 ajk Exp $
 
 use strict;
 use warnings;
@@ -10,9 +10,10 @@ package Data::Passphrase::Ruleset; {
     use Carp;
 
     # object attributes
-    my @debug :Field(Std => 'debug',     Type => 'Numeric'  );
-    my @file  :Field(Get => 'get_file',                     );
-    my @rules :Field(Get => 'get_rules',                    );
+    my @debug         :Field( Std => 'debug',         Type => 'Numeric'  );
+    my @file          :Field( Get => 'get_file',                         );
+    my @passing_score :Field( Std => 'passing_score', Type => 'Numeric'  );
+    my @rules         :Field( Get => 'get_rules',                        );
 
     my %init_args :InitArgs = (
         debug => {
@@ -23,6 +24,11 @@ package Data::Passphrase::Ruleset; {
         file => {
             Field => \@file,
             Pre   => \&preprocess,
+        },
+        passing_score => {
+            Def   => 0.6,
+            Field => \@passing_score,
+            Type  => 'Numeric',
         },
         rules => {
             Field => \@rules,
@@ -43,7 +49,6 @@ package Data::Passphrase::Ruleset; {
 
         return $value;
     }
-
     # overload constructor so we can automatically load the rules file
     sub new {
         my ($class, $arg_ref) = @_;
@@ -99,12 +104,11 @@ package Data::Passphrase::Ruleset; {
                 croak "$file: must return a reference to an array of rules";
             }
 
-            push @{$Rules_Cache{$file}{rules}}, map {
+            push @{ $Rules_Cache{$file}{rules} }, map {
                 ref eq 'HASH'
-                    ? Data::Passphrase::Rule->new({
-                        %$_,
-                        debug => $debug,
-                    })
+                    ? Data::Passphrase::Rule->new(
+                        { %$_, debug => $debug }
+                      )
                     : $_
                     ;
             } @$rule_list;
@@ -140,6 +144,7 @@ package Data::Passphrase::Ruleset; {
 
         my $return_value = $self->set(\@rules, $value);
         $self->set_file();
+
         return $return_value;
     }
 }
@@ -236,6 +241,11 @@ The filename of a Perl script that, when evaluated, returns a list of
 rules.  Each rule is specified as either an
 L<Data::Passphrase::Rule|Data::Passphrase::Rule> object or a hash
 reference used to construct one.
+
+=head3 passing_score
+
+The lowest score a rule's validate routine can return for the
+passphrase to pass that rule.  Defaults to 0.6.
 
 =head3 rules
 

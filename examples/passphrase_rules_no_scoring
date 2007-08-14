@@ -1,5 +1,5 @@
 # -*- CPerl -*-
-# $Id: passphrase_rules,v 1.6 2007/08/14 15:45:51 ajk Exp $
+# $Id: passphrase_rules_no_scoring,v 1.1 2007/08/14 15:45:51 ajk Exp $
 
 use strict;
 use warnings;
@@ -13,7 +13,6 @@ use List::MoreUtils qw/any false/;
 use Readonly;
 
 # constants to be used in the rules
-Readonly my $FAILING_SCORE             => 0.5;
 Readonly my $LDAP_SERVER               => 'ldap.example.com';
 Readonly my $MAXIMUM_TOTAL_CHARACTERS  => 127;
 Readonly my $MINIMUM_TOTAL_CHARACTERS  => 15;
@@ -46,25 +45,15 @@ return [
     # object.  The test data is just a string of 14 Xs -- the
     # passphrase-test script will check to make sure this string
     # results in a 450.
-    #
-    # The "validate" subroutine can return 0 or 1 to represent fail or
-    # pass, as in
-    #
-    #   validate => sub { $_[0] >= $MINIMUM_TOTAL_CHARACTERS }
-    #
-    # or it can return any value in between to represent a score.  The
-    # example below normalizes based on $STRONG_CHARACTERS such that a
-    # barely passing score of 60% is given for 15 characters, and
-    # anything above and including 25 characters is considered 100%.
 
     {
         code     => 450,
         message  => 'is too short',
-        test     => {
-            'X' x ($MINIMUM_TOTAL_CHARACTERS - 1) => { score => 0  },
-            'to be is to do'                      => { score => 56 },
-        },
-        validate => sub { $_[0] / $STRONG_CHARACTERS },
+        test     => [
+            'X' x ($MINIMUM_TOTAL_CHARACTERS - 1),
+            'to be is to do',
+        ],
+        validate => sub { $_[0] >= $MINIMUM_TOTAL_CHARACTERS },
     },
 
     # Same as above, but reject passphrases greater than 127
@@ -119,11 +108,11 @@ return [
     {
         code     => 460,
         message  => 'contains too few unique words',
-        test     => {
-            'antidisestablishmentarianism' => { score => 16 },
-            'two words two words'          => { score => 33 },
-        },
-        validate => sub { @{ $_[1]->{words} } / $STRONG_WORDS },
+        test     => [
+            'antidisestablishmentarianism',
+            'two words two words',
+        ],
+        validate => sub { @{$_[1]->{words}} >= $MINIMUM_UNIQUE_WORDS },
     },
 
     # A word must have at least 2 distinct characters.
@@ -131,10 +120,10 @@ return [
     {
         code     => 461,
         message  => 'contains too few valid words',
-        test     => { 'aaa bbb ccc ddd' => { score => 0 } },
+        test     => [ 'aaa bbb ccc ddd' ],
         validate => sub {
-            return ( false { /^(.)\1*$/ } @{ $_[1]->{words} } )
-                   / $STRONG_WORDS;
+            return $MINIMUM_UNIQUE_WORDS
+                   <= false { /^(.)\1*$/ } @{ $_[1]->{words} };
         },
     },
 
@@ -143,14 +132,13 @@ return [
     {
         code     => 463,
         message  => 'may not be based on the keyboard layout',
-        test     => {
-            'qaz xsw edc vfr'      => { score => 50 },
-            'qwerty asdf jkl vcxz' => { score => 50 },
-            'okm juh bgt rdx'      => { score => 50 },
-        },
+        test     => [
+            'qaz xsw edc vfr',
+            'qwerty asdf jkl vcxz',
+            'okm juh bgt rdx',
+        ],
         validate => sub {
-            return (any { !$QWERTY_GRAPH->has($_) } @{ $_[1]->{words} })
-                   || $FAILING_SCORE;
+            return any { !$QWERTY_GRAPH->has($_) } @{ $_[1]->{words} };
         },
     },
 
@@ -173,12 +161,12 @@ return [
                 username    => $username,
             });
 
-            return {
-                "my username is $username"        => { score => 50 },
-                "my last name is $full_name[0]"   => { score => 50 },
-                "my first name is $full_name[1]"  => { score => 50 },
-                "my middle name is $full_name[2]" => { score => 50 },
-            };
+            return [
+                "my username is $username",
+                "my last name is $full_name[0]",
+                "my first name is $full_name[1]",
+                "my middle name is $full_name[2]",
+            ];
         },
         validate => sub {
             my ($self, $data_hash) = @_;
@@ -192,7 +180,7 @@ return [
             # quickly fail if username is a word
             if (exists $word_hash->{$username}) {
                 $debug and warn "contains $username (username)";
-                return $FAILING_SCORE;
+                return 0;
             }
 
             # get display name
@@ -203,10 +191,7 @@ return [
             $debug and warn "full name: @full_name";
 
             # fail if any part of the full name is a word
-            return any { exists $word_hash->{$_} } @full_name
-                   ? $FAILING_SCORE
-                   : 1
-                   ;
+            return !any { exists $word_hash->{$_} } @full_name;
         },
     },
 
@@ -215,10 +200,10 @@ return [
     {
         code     => 454,
         message  => 'is too common',
-        test     => {
-            'what a piece of work is man'          => { score => 50 },
-            'a fool and his money are soon parted' => { score => 50 },
-        },
+        test     => [
+            'what a piece of work is man',
+            'a fool and his money are soon parted',
+        ],
         validate => sub {
             my ($input) = @_;
 
@@ -226,10 +211,7 @@ return [
             my $comparison_key = lc $input;
             $comparison_key =~ s/[^a-z ]//gi;
 
-            return $COMMON_PHRASEBOOK->has($comparison_key)
-                   ? $FAILING_SCORE
-                   : 1
-                   ;
+            return !$COMMON_PHRASEBOOK->has($comparison_key);
         },
     },
 ];

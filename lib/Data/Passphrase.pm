@@ -1,4 +1,4 @@
-# $Id: Passphrase.pm,v 1.18 2007/01/30 20:09:03 ajk Exp $
+# $Id: Passphrase.pm,v 1.19 2007/08/14 15:45:51 ajk Exp $
 
 use strict;
 use warnings;
@@ -21,7 +21,7 @@ package Data::Passphrase; {
         return defined $passphrase ? length $passphrase : 0;
     }
 
-    use version; our $VERSION = qv('0.0.5');
+    use version; our $VERSION = qv('0.0.7');
 
     use Data::Passphrase::Ruleset;
     use Carp;
@@ -34,22 +34,24 @@ package Data::Passphrase; {
     }
 
     # object attributes
-    my @code       :Field(Std => 'code',                        );
-    my @custom     :Field(Std => 'custom',    Type => 'Hash_ref');
-    my @debug      :Field(Std => 'debug',     Type => 'Numeric' );
-    my @message    :Field(Std => 'message'                      );
-    my @passphrase :Field(Std => 'passphrase'                   );
-    my @ruleset    :Field(Std => 'ruleset',                     );
-    my @username   :Field(Std => 'username'                     );
+    my @code       :Field(Std => 'code',                         );
+    my @custom     :Field(Std => 'custom',    Type => 'Hash_ref' );
+    my @debug      :Field(Std => 'debug',     Type => 'Numeric'  );
+    my @message    :Field(Std => 'message'                       );
+    my @passphrase :Field(Std => 'passphrase'                    );
+    my @ruleset    :Field(Std => 'ruleset',                      );
+    my @score      :Field(Std => 'score',     Type => 'Numeric'  );
+    my @username   :Field(Std => 'username'                      );
 
     my %init_args :InitArgs = (
-        code       => {            Field => \@code,       Type  => 'Numeric' },
-        custom     => {            Field => \@custom,     Type  => 'Hash_ref'},
-        debug      => {Def   => 0, Field => \@debug,      Type  => 'Numeric' },
-        message    => {            Field => \@message,                       },
-        passphrase => {            Field => \@passphrase,                    },
-        ruleset    => {            Field => \@ruleset,                       },
-        username   => {            Field => \@username,                      },
+        code       => { Field => \@code, Type => 'Numeric' },
+        custom     => { Field => \@custom, Type => 'Hash_ref'},
+        debug      => { Def => 0, Field => \@debug, Type => 'Numeric' },
+        message    => { Field => \@message },
+        passphrase => { Field => \@passphrase },
+        ruleset    => { Field => \@ruleset },
+        score      => { Field => \@score, Type => 'Numeric' },
+        username   => { Field => \@username },
     );
 
     sub new {
@@ -109,12 +111,22 @@ package Data::Passphrase; {
         my $debug      = $self->get_debug     ();
         my $passphrase = $self->get_passphrase();
 
-        # reset code & message
+        # reset code, message, & score
         $self->set_code   (undef);
         $self->set_message(undef);
+        $self->set_score  (0    );
+
+        # declare failure status variables
+        my ($first_failure_code, $first_failure_message);
+
+        # collect a score from each rule & remember the lowest
+        my @scores = ();
+        my $minimum_score;
 
         # iterate through rules
-        my @rules = @{$self->get_ruleset()->get_rules()};
+        my $ruleset       = $self->get_ruleset();
+        my $passing_score = $ruleset->get_passing_score();
+        my @rules         = @{ $ruleset->get_rules() };
         $debug and warn 'invoking ', scalar @rules, ' rules';
         foreach my $rule (@rules) {
 
@@ -131,7 +143,7 @@ package Data::Passphrase; {
                        defined $message ? $message : '[message not available]';
 
             # call the subroutine of the next rule, passing data hash
-            my $status = eval { $validate->($self, $self->get_data()) };
+            my $score = eval { $validate->($self, $self->get_data()) };
 
             # catch errors
             if ($@) {
@@ -141,23 +153,42 @@ package Data::Passphrase; {
                 return;
             }
 
-            # return on failure
-            if (!$status) {
-
-                # let the validate method set these if it wants to
-                $self->set_message($message) if !defined $self->get_message();
-                $self->set_code   ($code   ) if !defined $self->get_code   ();
-
-                return;
+            # the lowest score will be the resultant score for the ruleset
+            if (!defined $minimum_score || $score < $minimum_score) {
+                $minimum_score = $score;
             }
 
-            # a return code of -1 means short-circuit
-            last if $status == -1;
+            # handle failure
+            if ($score < $passing_score) {
+
+                # let the validate method set these if it wants to
+                if ( !defined $self->get_code() ) {
+                    $self->set_code($code);
+                }
+                if ( !defined $self->get_message() ) {
+                    $self->set_message($message);
+                }
+
+                # the first code & message will be resultant for the ruleset
+                $first_failure_code    ||= $code;
+                $first_failure_message ||= $message;
+            }
+
+            # a score of -1 means short-circuit
+            last if $score == -1;
         }
 
-        # set the code and message for success
-        $self->set_code(RC_OK);
-        $self->set_message('acceptable');
+        if (defined $first_failure_code) {
+            $self->set_code   ($first_failure_code   );
+            $self->set_message($first_failure_message);
+        }
+        else {
+            $self->set_code(RC_OK);
+            $self->set_message('acceptable');
+        }
+
+        # a passphrase is only as strong as its weakest link?
+        $self->set_score( int( $minimum_score * 100 ) );
 
         return;
     }
@@ -190,11 +221,12 @@ _DOC                                                   validate a passphrase
         my $passphrase_object = $class->new($arg_ref);
 
         $debug and warn 'calling validate()';
-        $passphrase_object->validate();
+        $passphrase_object->validate(1);
 
         return {
             code    => $passphrase_object->get_code   (),
             message => $passphrase_object->get_message(),
+            score   => $passphrase_object->get_score  (),
         };
     }
 }
@@ -204,11 +236,11 @@ __END__
 
 =head1 NAME
 
-Data::Passphrase - passphrase strength checker
+Data::Passphrase - rule-based passphrase strength checker
 
 =head1 VERSION
 
-This documentation refers to Data::Passphrase version 0.0.5.
+This documentation refers to Data::Passphrase version 0.0.7.
 
 =head1 SYNOPSIS
 
@@ -231,7 +263,8 @@ Object-oriented interface:
     
         my $code    = $passphrase_object->get_code   ();
         my $message = $passphrase_object->get_message();
-        print "$code $message\n";
+        my $score   = $passphrase_object->get_score  ();
+        print "$code $message, score: $score\%\n";
     }
 
 Procedural interface:
@@ -247,15 +280,15 @@ Procedural interface:
             username   => $ENV{LOGNAME},
         };
     
-        print "$result->{code} $result->{message}\n";
+        print "$result->{code} $result->{message}, score: $result->{score}\%\n";
     }
 
 =head1 DESCRIPTION
 
 This module provides object-oriented and procedural interfaces for
-checking passphrase strength against a set of customizable rules.  An
-Apache handler that provides HTTP and SOAP services makes
-strength-checking possible by remote applications.
+checking passphrase strength against a set of customizable rules.
+An L<Apache handler|Data::Passphrase::Apache> that provides HTTP and
+SOAP services makes strength-checking possible by remote applications.
 
 =head1 OBJECT-ORIENTED INTERFACE
 
@@ -295,10 +328,10 @@ also L<get_data()|/get_data()>.
 
 Evaluate each rule on the passphrase specified by the
 L<passphrase|/passphrase> attribute.  Rules are evaulated in the order
-specified until a rule determines that the passphrase is too weak or
-an error occurs.  After this method is called, the L<code|/code> and
-L<message|/message> attributes will contain the results of the
-validation.
+specified, each one generating a separate score for the passphrase.
+The lowest score is returned as the overall passphrase score.  After
+this method is called, the L<code|/code>, L<message|/message>, and
+L<score|/score> attributes will contain the results of the validation.
 
 =head2 Attributes
 
@@ -307,15 +340,15 @@ get_I<attribute>() and set_I<attribute>().
 
 =head3 code
 
-HTTP status code to be returned at the end of the request.
+HTTP-like status code to be returned at the end of the request.
 
 =head3 debug
 
-If TRUE, enable debugging to the Apache error log.
+If TRUE, enable debugging to STDERR.
 
 =head3 message
 
-HTTP status message to be returned at the end of the request.
+HTTP-like status message to be returned at the end of the request.
 
 =head3 passphrase
 
@@ -326,6 +359,10 @@ The passphrase submitted by the user.
 The ruleset used to validate passphrases, either as a
 L<Data::Passphrase::Ruleset|Data::Passphrase::Ruleset> object or as
 a filename.  Defaults to F</etc/passphrase_rules>.
+
+=head3 score
+
+The resultant score, usually between 0 and 100, for the passphrase.
 
 =head3 username
 
@@ -338,9 +375,10 @@ The username, which may be useful to rules.  Defaults to $r->user().
  $results = validate_passphrase \%attributes
 
 Validate a passphrase.  Attributes passed in C<%attributes> are the
-same as for the object-oriented interface.  C<$results> contains two
-entries, C<code> and C<message>, whose values correspond to those
-returned by the object-oriented attributes of the same names.
+same as for the object-oriented interface.  C<$results> contains three
+entries -- C<code>, C<message>, and C<score> -- whose values
+correspond to those returned by the object-oriented attributes of the
+same names.
 
 =head1 RULES SPECIFICATION
 
@@ -368,14 +406,15 @@ passphrase(s) used to test this rule
 
 =item validate
 
-code to do the validation
+code to do the validation and return a score
 
 =back
 
 When validating passphrases, each subroutine referenced by C<validate>
-will be called in turn.  If every rule's validate subroutine succeeds,
-a code of 200 and message of C<Passphrase accepted> will be returned;
-otherwise, the code and message specified will be returned.
+will be called in turn.  If every rule's validate subroutine returns a
+value exceeding the passing score (which defaults to 0.6), a code of
+200 and message of C<Passphrase accepted> will be returned; otherwise,
+the code and message specified will be returned.
 
 =head2 Validation
 
@@ -387,10 +426,10 @@ object evaluates to the text of the passphrase to avoid the need to
 call L<get_passphrase()|/passphrase>.  In numeric context, the object
 evaluates to the I<length> of the passphrase.
 
-Using the L<set_data()/set_data()> method, a rule can stow away data
+Using the L<set_data()|/set_data()> method, a rule can stow away data
 for use by a later rule.  The data is stored as key/value pairs in a
 hash.  A reference to this hash is passed as the second argument to
-the validate method; you can also use L<get_data()/get_data()> to get
+the validate method; you can also use L<get_data()|/get_data()> to get
 to it.
 
 Return values from the validate subroutine are interpreted as follows:
@@ -402,17 +441,19 @@ Return values from the validate subroutine are interpreted as follows:
 The candidate passphrase has passed this rule.  Return C<200
 Passphrase accepted> without processing any subsequent rules.
 
-=item 0
+=item 0 to < 0.6
 
-The candidate passphrase has failed this rule.  Return the error code
-and message specified in the rule without processing any subsequent
-rules.
+The candidate passphrase has failed this rule.  Continue with
+subsequent rules; the lowest score returned by all the rules will be
+multiplied by 100, have it's non-integer part removed, and returned.
 
-=item 1
+=item >= 0.6
 
 The candidate passphrase has passed this rule.  Continue with
 subsequent rules and return C<200 Passphrase accepted> if the
-passphrase passes all of them
+passphrase passes all of them.  The lowest score returned by all the
+rules will be multiplied by 100, have it's non-integer part removed,
+and returned.
 
 =back
 
@@ -464,13 +505,24 @@ Here's an example with only one rule:
     ];
     __EOF__
 
-This rule causes C<450 Passphrase is too short> to be returned for any
-passphrase shorter than 15 characters.  The validate subroutine can
-use C<$_[0]> as a comparator because in numeric context it evaluates
-to the length of the passphrase even though it's an Data::Passphrase
-object.  The test data is just a string of 14 Xs -- the
-passphrase-test script will check to make sure this string results in
-a 450.
+This rule causes C<450 Passphrase is too short> and a score of C<0> to
+be returned for any passphrase shorter than 15 characters.  The
+validate subroutine can use C<$_[0]> as a comparator because in
+numeric context it evaluates to the length of the passphrase even
+though it's an Data::Passphrase object.  The test data is just a
+string of 14 Xs -- the passphrase-test script will check to make sure
+this string results in a 450.
+
+The validate routine can be written to provide a more informative score:
+
+            test     => { 'X' x ($MINIMUM_TOTAL_CHARACTERS - 1)
+                          => { score => 56 } },
+            validate => sub { $_[0] / ($MINIMUM_TOTAL_CHARACTERS / 0.6) },
+
+By dividing by a "preferred" length, we get a score that varies based
+on the length of the candidate passphrase.  In this case we divide by
+25, which makes 15 a passing score.  Specifying a hash for the test
+attribute lets us test the score of a passphrase that should fail.
 
 For more examples, see the included F<passphrase_rules> file.
 

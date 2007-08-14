@@ -1,8 +1,11 @@
 MANIFEST
 Makefile.PL
 README
+examples/meter/meter.html
+examples/meter/meter.js
 examples/passphrase_deny
 examples/passphrase_rules
+examples/passphrase_rules_no_scoring
 lib/Data/Passphrase.pm
 lib/Data/Passphrase/Apache.pm
 lib/Data/Passphrase/Graph.pm
@@ -16,6 +19,7 @@ lib/Data/Passphrase/Rule.pm
 lib/Data/Passphrase/Ruleset.pm
 scripts/passphrase-test
 t/00-load.t
-t/01-local.t
+t/01-scoring.t
+t/02-no-scoring.t
 META.yml                                 Module meta-data (added by MakeMaker)
 SIGNATURE                                Public-key signature (added by MakeMaker)

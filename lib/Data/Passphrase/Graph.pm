@@ -1,4 +1,4 @@
-# $Id: Graph.pm,v 1.4 2007/01/30 20:09:03 ajk Exp $
+# $Id: Graph.pm,v 1.5 2007/08/14 15:45:51 ajk Exp $
 
 use strict;
 use warnings;
@@ -152,7 +152,7 @@ L<build_graph()|/build_graph()>.  Then,
 L<graph_check()|/graph_check()> is used to determine if a word is
 contained by the graph.
 
-=head build_graph()
+=head3 build_graph()
 
  $graph = build_graph $type
 
